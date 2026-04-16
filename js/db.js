@@ -100,13 +100,16 @@ export async function getCachedOHLCV(cacheKey) {
 }
 
 export async function setCachedOHLCV(cacheKey, interval, ohlcvJson) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 4 * 60 * 60 * 1000); // +4 hours
   const { error } = await getClient()
     .from('analysis_cache')
     .upsert({
       ticker: cacheKey,
       interval,
       ohlcv_json: ohlcvJson,
-      fetched_at: new Date().toISOString(),
+      fetched_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
     });
   if (error) console.warn('Cache write failed:', error.message);
 }

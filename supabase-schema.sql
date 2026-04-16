@@ -45,8 +45,7 @@ create table if not exists analysis_cache (
   interval    text not null default '1d',
   ohlcv_json  jsonb not null,
   fetched_at  timestamptz default now(),
-  expires_at  timestamptz generated always as
-              (fetched_at + interval '4 hours') stored
+  expires_at  timestamptz default (now() + interval '4 hours')
 );
 
 -- index לחיפוש cache תקף
