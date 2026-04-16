@@ -37,7 +37,7 @@ export function isConfigured() {
 export function requireConfig() {
   if (!isConfigured()) {
     const current = encodeURIComponent(location.pathname + location.search);
-    location.href = `/settings.html?redirect=${current}`;
+    location.href = `settings.html?redirect=${current}`;
     return false;
   }
   return true;
