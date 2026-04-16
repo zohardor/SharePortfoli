@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הגדרות | SharePortfolio</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">📈 SharePortfolio</span>
+  <div class="nav-links">
+    <a href="index.html"     class="nav-link">תיק השקעות</a>
+    <a href="buy.html"       class="nav-link">ניתוח קנייה</a>
+    <a href="sell.html"      class="nav-link">המלצות מכירה</a>
+    <a href="watchlist.html" class="nav-link">מעקב</a>
+    <a href="settings.html"  class="nav-link active">הגדרות</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-header">
+    <h1 class="page-title">הגדרות</h1>
+  </div>
+
+  <div id="setup-banner" class="card" style="margin-bottom:1.5rem;border-color:var(--yellow);display:none">
+    <strong style="color:var(--yellow)">⚠ נדרשת הגדרה ראשונית</strong>
+    <p style="margin-top:.4rem;color:var(--text-muted);font-size:.9rem">יש להזין את פרטי Supabase כדי לשמור ולטעון את תיק ההשקעות שלך.</p>
+  </div>
+
+  <!-- Supabase settings -->
+  <div class="settings-section">
+    <div class="settings-title">חיבור Supabase</div>
+    <div class="form-row">
+      <label class="form-label" for="sb-url">Supabase Project URL</label>
+      <input class="input" id="sb-url" type="url" placeholder="https://xxxx.supabase.co" dir="ltr">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="sb-key">Supabase Anon Key</label>
+      <input class="input" id="sb-key" type="password" placeholder="eyJ..." dir="ltr">
+      <small style="color:var(--text-muted);font-size:.78rem">המפתח הציבורי (anon key) בטוח לשימוש בדפדפן</small>
+    </div>
+    <div class="connection-status" id="conn-status">
+      <span class="status-dot" id="conn-dot"></span>
+      <span id="conn-text">לא נבדק</span>
+    </div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.75rem">
+      <button class="btn btn-outline" id="btn-test">בדוק חיבור</button>
+      <button class="btn btn-primary" id="btn-save-supabase">שמור</button>
+    </div>
+  </div>
+
+  <!-- Proxy settings -->
+  <div class="settings-section">
+    <div class="settings-title">CORS Proxy (לנתוני Yahoo Finance)</div>
+    <div class="form-row">
+      <label class="form-label" for="proxy-select">בחר Proxy</label>
+      <select class="input input-rtl" id="proxy-select" style="direction:ltr">
+        <option value="https://corsproxy.io/?">corsproxy.io (ברירת מחדל)</option>
+        <option value="https://api.allorigins.win/get?url=">allorigins.win</option>
+        <option value="custom">מותאם אישית...</option>
+      </select>
+    </div>
+    <div class="form-row" id="custom-proxy-row" style="display:none">
+      <label class="form-label" for="custom-proxy">URL מותאם אישית</label>
+      <input class="input" id="custom-proxy" type="url" placeholder="https://myproxy.example.com/?url=" dir="ltr">
+    </div>
+    <button class="btn btn-primary" id="btn-save-proxy">שמור Proxy</button>
+  </div>
+
+  <!-- User ID info -->
+  <div class="settings-section">
+    <div class="settings-title">מזהה משתמש</div>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:.5rem">
+      מזהה אנונימי ייחודי המשמש לזיהוי הנתונים שלך ב-Supabase. שמור אותו אם תרצה להעביר נתונים.
+    </p>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <code class="input" id="user-id-display" style="flex:1;cursor:text;font-size:.8rem" dir="ltr"></code>
+      <button class="btn btn-outline btn-sm" id="btn-copy-uid">העתק</button>
+    </div>
+  </div>
+
+  <!-- Schema help -->
+  <div class="settings-section">
+    <div class="settings-title">הגדרת Supabase — SQL Schema</div>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem">
+      הרץ את ה-SQL הבא ב-<a href="#" id="supabase-sql-link" target="_blank">Supabase SQL Editor</a> כדי ליצור את הטבלאות הנדרשות:
+    </p>
+    <pre style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;font-size:.75rem;overflow-x:auto;direction:ltr;text-align:left"><code id="schema-display"></code></pre>
+    <button class="btn btn-outline btn-sm" id="btn-copy-schema" style="margin-top:.5rem">העתק SQL</button>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { getConfig, saveConfig, isConfigured, USER_ID } from './js/config.js';
+import { resetClient, testConnection } from './js/db.js';
+import { showToast } from './js/utils.js';
+
+const SQL_SCHEMA = `-- אחזקות
+create table if not exists holdings (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    text not null,
+  ticker     text not null,
+  name       text,
+  shares     numeric(18,6) not null,
+  avg_cost   numeric(18,4) not null,
+  added_at   timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table holdings enable row level security;
+create policy if not exists "own rows" on holdings
+  using (user_id = current_setting('request.headers')::json->>'x-user-id');
+
+-- רשימת מעקב
+create table if not exists watchlist (
+  id       uuid primary key default gen_random_uuid(),
+  user_id  text not null,
+  ticker   text not null,
+  added_at timestamptz default now(),
+  unique(user_id, ticker)
+);
+alter table watchlist enable row level security;
+create policy if not exists "own rows" on watchlist
+  using (user_id = current_setting('request.headers')::json->>'x-user-id');
+
+-- מטמון ניתוח (ללא RLS — נתוני מניות הם ציבוריים)
+create table if not exists analysis_cache (
+  ticker      text primary key,
+  interval    text not null default '1d',
+  ohlcv_json  jsonb not null,
+  fetched_at  timestamptz default now(),
+  expires_at  timestamptz generated always as
+              (fetched_at + interval '4 hours') stored
+);`;
+
+document.getElementById('schema-display').textContent = SQL_SCHEMA;
+document.getElementById('user-id-display').textContent = USER_ID;
+
+// Pre-fill from saved config
+const cfg = getConfig();
+document.getElementById('sb-url').value = cfg.supabaseUrl || '';
+document.getElementById('sb-key').value = cfg.supabaseKey || '';
+
+// Show setup banner if not configured
+if (!isConfigured()) {
+  document.getElementById('setup-banner').style.display = 'block';
+}
+
+// Proxy select
+const proxySelect = document.getElementById('proxy-select');
+const knownProxies = ['https://corsproxy.io/?', 'https://api.allorigins.win/get?url='];
+if (cfg.proxyUrl && !knownProxies.includes(cfg.proxyUrl)) {
+  proxySelect.value = 'custom';
+  document.getElementById('custom-proxy-row').style.display = 'block';
+  document.getElementById('custom-proxy').value = cfg.proxyUrl;
+} else {
+  proxySelect.value = cfg.proxyUrl || 'https://corsproxy.io/?';
+}
+proxySelect.addEventListener('change', () => {
+  document.getElementById('custom-proxy-row').style.display = proxySelect.value === 'custom' ? 'block' : 'none';
+});
+
+// Supabase SQL editor link
+document.getElementById('supabase-sql-link').addEventListener('click', e => {
+  e.preventDefault();
+  const url = document.getElementById('sb-url').value.trim();
+  if (url) {
+    const projectRef = url.replace('https://', '').split('.')[0];
+    window.open(`https://supabase.com/dashboard/project/${projectRef}/sql/new`, '_blank');
+  } else {
+    window.open('https://supabase.com/dashboard', '_blank');
+  }
+});
+
+// Save Supabase
+document.getElementById('btn-save-supabase').addEventListener('click', () => {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { showToast('יש למלא URL ו-Key', 'error'); return; }
+  saveConfig({ supabaseUrl: url, supabaseKey: key });
+  resetClient();
+  document.getElementById('setup-banner').style.display = 'none';
+  showToast('הגדרות Supabase נשמרו', 'success');
+});
+
+// Test connection
+document.getElementById('btn-test').addEventListener('click', async () => {
+  const dot  = document.getElementById('conn-dot');
+  const text = document.getElementById('conn-text');
+  dot.className  = 'status-dot testing';
+  text.textContent = 'בודק...';
+  try {
+    await testConnection();
+    dot.className  = 'status-dot ok';
+    text.textContent = 'מחובר בהצלחה ✓';
+  } catch (err) {
+    dot.className  = 'status-dot error';
+    text.textContent = 'שגיאה: ' + err.message;
+  }
+});
+
+// Save proxy
+document.getElementById('btn-save-proxy').addEventListener('click', () => {
+  const sel = proxySelect.value;
+  const proxyUrl = sel === 'custom' ? document.getElementById('custom-proxy').value.trim() : sel;
+  if (!proxyUrl) { showToast('יש להזין URL של proxy', 'error'); return; }
+  saveConfig({ proxyUrl });
+  showToast('Proxy נשמר', 'success');
+});
+
+// Copy user ID
+document.getElementById('btn-copy-uid').addEventListener('click', () => {
+  navigator.clipboard.writeText(USER_ID);
+  showToast('מזהה הועתק', 'success');
+});
+
+// Copy schema
+document.getElementById('btn-copy-schema').addEventListener('click', () => {
+  navigator.clipboard.writeText(SQL_SCHEMA);
+  showToast('SQL הועתק', 'success');
+});
+</script>
+</body>
+</html>

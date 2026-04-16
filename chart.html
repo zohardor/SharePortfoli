@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>גרף מניה | SharePortfolio</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/chart.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">📈 SharePortfolio</span>
+  <div class="nav-links">
+    <a href="index.html"     class="nav-link">תיק השקעות</a>
+    <a href="buy.html"       class="nav-link">ניתוח קנייה</a>
+    <a href="sell.html"      class="nav-link">המלצות מכירה</a>
+    <a href="watchlist.html" class="nav-link">מעקב</a>
+    <a href="settings.html"  class="nav-link">הגדרות</a>
+  </div>
+</nav>
+
+<main class="main">
+  <!-- Header with ticker info -->
+  <div class="page-header" id="chart-page-header">
+    <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+      <h1 class="page-title" id="hdr-ticker">—</h1>
+      <span style="color:var(--text-muted);font-size:.9rem" id="hdr-name"></span>
+      <span class="ltr" style="font-size:1.3rem;font-weight:700" id="hdr-price">—</span>
+      <span class="ltr" id="hdr-change"></span>
+    </div>
+    <div style="display:flex;gap:.5rem">
+      <a href="javascript:history.back()" class="btn btn-outline btn-sm">← חזור</a>
+      <button class="btn btn-outline btn-sm" id="btn-add-to-watch">+ מעקב</button>
+    </div>
+  </div>
+
+  <div class="chart-page-layout">
+    <!-- Left: chart + controls -->
+    <div>
+      <!-- Timeframe tabs -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+        <div class="tab-bar" id="tf-tabs">
+          <button class="tab-btn" data-tf="1mo">1ח</button>
+          <button class="tab-btn" data-tf="3mo">3ח</button>
+          <button class="tab-btn" data-tf="6mo">6ח</button>
+          <button class="tab-btn active" data-tf="1y">1ש</button>
+          <button class="tab-btn" data-tf="3y">3ש</button>
+          <button class="tab-btn" data-tf="5y">5ש</button>
+          <button class="tab-btn" data-tf="max">מקסימום</button>
+        </div>
+        <!-- Overlay toggles -->
+        <div class="overlay-toggles">
+          <button class="toggle-btn on" data-tog="ma">MA</button>
+          <button class="toggle-btn"    data-tog="ma150w">MA 150W</button>
+          <button class="toggle-btn"    data-tog="bb">BB</button>
+          <button class="toggle-btn on" data-tog="rsi">RSI</button>
+          <button class="toggle-btn on" data-tog="macd">MACD</button>
+          <button class="toggle-btn on" data-tog="vol">נפח</button>
+        </div>
+      </div>
+
+      <!-- Chart area -->
+      <div class="chart-container">
+        <div class="chart-loading" id="chart-loading">
+          <div class="loading-wrap"><div class="spinner"></div><span>טוען גרף...</span></div>
+        </div>
+        <div id="chart-area" style="width:100%;min-height:600px"></div>
+      </div>
+    </div>
+
+    <!-- Right: sidebar -->
+    <aside class="chart-sidebar">
+      <!-- Signal card -->
+      <div class="card sidebar-section">
+        <div class="sidebar-title">ניתוח טכני</div>
+        <div id="analysis-loading" class="loading-wrap" style="display:none;padding:.75rem 0">
+          <div class="spinner"></div><span>מנתח...</span>
+        </div>
+        <div id="signal-display"></div>
+        <div id="score-display"></div>
+      </div>
+
+      <!-- MA 150W -->
+      <div class="card sidebar-section">
+        <div class="sidebar-title">ממוצע נע 150 שבועות</div>
+        <div class="ma150w-block" id="ma150w-display">
+          <span style="color:var(--text-muted);font-size:.85rem">טוען...</span>
+        </div>
+      </div>
+
+      <!-- Indicators -->
+      <div class="card sidebar-section">
+        <div class="sidebar-title">אינדיקטורים</div>
+        <div class="indicator-list" id="indicators-display">
+          <span style="color:var(--text-muted);font-size:.85rem">טוען...</span>
+        </div>
+      </div>
+
+      <!-- Patterns -->
+      <div class="card sidebar-section">
+        <div class="sidebar-title">תבניות שזוהו</div>
+        <div id="patterns-display">
+          <span style="color:var(--text-muted);font-size:.85rem">טוען...</span>
+        </div>
+      </div>
+
+      <!-- Signal factors -->
+      <div class="card sidebar-section" id="factors-card" style="display:none">
+        <div class="sidebar-title">גורמי ניתוח</div>
+        <ul class="signal-factors" id="factors-list"></ul>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { requireConfig }       from './js/config.js';
+import { fetchOHLCV, fetchCurrentPrice, toWeekly } from './js/proxy.js';
+import { analyzeStock }        from './js/recommendations.js';
+import { renderChart, filterByTimeframe } from './js/chart-init.js';
+import { addToWatchlist }      from './js/db.js';
+import { formatUSD, formatPct, signalBadge, dirBadge, PATTERN_LABELS, showToast, pnlClass, ltr, scoreToSignal } from './js/utils.js';
+
+if (!requireConfig()) throw new Error('redirect');
+
+const params = new URLSearchParams(location.search);
+const ticker = (params.get('ticker') || '').toUpperCase();
+if (!ticker) { location.href = 'index.html'; throw new Error('no ticker'); }
+
+document.title = `${ticker} | SharePortfolio`;
+
+let allDailyOhlcv   = [];
+let allWeeklyOhlcv  = [];
+let currentTf       = '1y';
+let visOptions      = { showMA: true, showMA150w: false, showBB: false, showRSI: true, showMACD: true, showVolume: true };
+let detectedPatterns = [];
+
+// Toggle state from buttons
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('on');
+    const tog = btn.dataset.tog;
+    const map = { ma:'showMA', ma150w:'showMA150w', bb:'showBB', rsi:'showRSI', macd:'showMACD', vol:'showVolume' };
+    if (map[tog]) { visOptions[map[tog]] = btn.classList.contains('on'); redrawChart(); }
+  });
+});
+
+// Timeframe tabs
+document.getElementById('tf-tabs').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTf = btn.dataset.tf;
+  redrawChart();
+});
+
+// Add to watchlist
+document.getElementById('btn-add-to-watch')?.addEventListener('click', async () => {
+  try { await addToWatchlist(ticker); showToast(`${ticker} נוסף לרשימת המעקב`, 'success'); }
+  catch (err) { showToast('שגיאה: ' + err.message, 'error'); }
+});
+
+// ── Load & render ──────────────────────────────────────────────────
+async function main() {
+  // Fetch price header
+  fetchCurrentPrice(ticker).then(q => {
+    document.getElementById('hdr-ticker').textContent = ticker;
+    document.getElementById('hdr-name').textContent   = q.name || '';
+    if (q.price != null) {
+      document.getElementById('hdr-price').textContent = formatUSD(q.price);
+      if (q.previousClose) {
+        const chg = ((q.price - q.previousClose) / q.previousClose) * 100;
+        const el = document.getElementById('hdr-change');
+        el.textContent = formatPct(chg);
+        el.className = 'ltr ' + pnlClass(chg);
+      }
+    }
+  });
+
+  // Fetch OHLCV
+  document.getElementById('chart-loading').style.display = 'flex';
+  try {
+    [allDailyOhlcv, allWeeklyOhlcv] = await Promise.all([
+      fetchOHLCV(ticker, '1d', '5y'),
+      fetchOHLCV(ticker, '1wk', '5y'),
+    ]);
+    redrawChart();
+  } catch (err) {
+    document.getElementById('chart-loading').innerHTML = `<p style="color:var(--red)">שגיאה בטעינת נתונים: ${err.message}</p>`;
+    return;
+  } finally {
+    document.getElementById('chart-loading').style.display = 'none';
+  }
+
+  // Run analysis (async, don't block chart)
+  document.getElementById('analysis-loading').style.display = 'flex';
+  try {
+    const result = await analyzeStock(ticker);
+    detectedPatterns = result.patterns;
+    renderAnalysis(result);
+    redrawChart(); // re-render with patterns
+  } catch (err) {
+    document.getElementById('signal-display').innerHTML = `<span style="color:var(--red)">שגיאת ניתוח</span>`;
+  } finally {
+    document.getElementById('analysis-loading').style.display = 'none';
+  }
+}
+
+function redrawChart() {
+  const filtered = filterByTimeframe(allDailyOhlcv, currentTf);
+  renderChart('chart-area', filtered, allWeeklyOhlcv, detectedPatterns, visOptions);
+}
+
+function renderAnalysis(result) {
+  // Signal badge
+  document.getElementById('signal-display').innerHTML = `
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+      ${signalBadge(result.signal)}
+      <span class="ltr" style="font-size:1.6rem;font-weight:800;color:${result.score>0?'var(--green)':result.score<0?'var(--red)':'var(--text-muted)'}">${result.score>0?'+':''}${result.score}</span>
+    </div>
+  `;
+
+  // MA 150W
+  const { last } = result.indicators;
+  if (last.ma150w != null) {
+    const dev = ((last.close - last.ma150w) / last.ma150w) * 100;
+    const isAbove = dev >= 0;
+    document.getElementById('ma150w-display').innerHTML = `
+      <div class="ma150w-stat">
+        <span class="ma150w-label">ממוצע 150W</span>
+        <span class="ma150w-value ltr">${formatUSD(last.ma150w)}</span>
+      </div>
+      <div class="ma150w-stat">
+        <span class="ma150w-label">סטייה</span>
+        <span class="ma150w-value ${isAbove?'ma150w-above':'ma150w-below'} ltr">${isAbove?'+':''}${dev.toFixed(1)}%</span>
+      </div>
+      <div class="ma150w-stat">
+        <span class="ma150w-label">מיקום</span>
+        <span class="ma150w-value ${isAbove?'ma150w-above':'ma150w-below'}">${isAbove?'מעל הממוצע ✓':'מתחת לממוצע ✗'}</span>
+      </div>
+    `;
+  }
+
+  // Indicators
+  document.getElementById('indicators-display').innerHTML = [
+    { label: 'RSI (14)',    val: last.rsi?.toFixed(1), cls: last.rsi < 30 ? 'ind-above' : last.rsi > 70 ? 'ind-below' : 'ind-neutral' },
+    { label: 'MA 50 יום',  val: last.sma50 ? formatUSD(last.sma50)  : null, cls: last.close > last.sma50  ? 'ind-above' : 'ind-below' },
+    { label: 'MA 200 יום', val: last.sma200 ? formatUSD(last.sma200) : null, cls: last.close > last.sma200 ? 'ind-above' : 'ind-below' },
+    { label: 'MACD Hist',  val: last.macdHist?.toFixed(3), cls: last.macdHist > 0 ? 'ind-above' : 'ind-below' },
+  ].filter(r => r.val != null).map(r => `
+    <div class="indicator-row">
+      <span class="ind-label">${r.label}</span>
+      <span class="ind-value ${r.cls} ltr">${r.val}</span>
+    </div>
+  `).join('');
+
+  // Patterns
+  const patsEl = document.getElementById('patterns-display');
+  if (result.patterns.length) {
+    patsEl.innerHTML = result.patterns.slice(0, 5).map(p => {
+      const lbl = PATTERN_LABELS[p.type] || { text: p.type };
+      const conf = Math.round(p.confidence * 100);
+      const confCls = conf >= 70 ? 'conf-high' : conf >= 50 ? 'conf-mid' : 'conf-low';
+      return `
+        <div class="pattern-mini">
+          <div class="pattern-mini-name">${lbl.text} ${dirBadge(p.direction)}</div>
+          <div class="pattern-mini-conf">
+            <span>רמת ביטחון: ${conf}%</span>
+            <div class="confidence-bar" style="display:inline-block;margin-right:.4rem">
+              <div class="confidence-fill ${confCls}" style="width:${conf}%"></div>
+            </div>
+          </div>
+          ${p.targetPrice ? `<div style="font-size:.8rem;margin-top:.2rem">יעד: <span class="ltr" style="color:var(--green)">${formatUSD(p.targetPrice)}</span></div>` : ''}
+        </div>
+      `;
+    }).join('');
+  } else {
+    patsEl.innerHTML = '<span style="color:var(--text-muted);font-size:.85rem">לא זוהו תבניות</span>';
+  }
+
+  // Signal factors
+  if (result.signals.length) {
+    document.getElementById('factors-card').style.display = 'block';
+    document.getElementById('factors-list').innerHTML = result.signals.map(s => `
+      <li class="signal-factor">
+        <span class="factor-score ${s.score>0?'pos':'neg'}">${s.score>0?'+':''}${s.score}</span>
+        <span>${s.desc}</span>
+      </li>
+    `).join('');
+  }
+}
+
+main();
+</script>
+</body>
+</html>

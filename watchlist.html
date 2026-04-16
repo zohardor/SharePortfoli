@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>רשימת מעקב | SharePortfolio</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">📈 SharePortfolio</span>
+  <div class="nav-links">
+    <a href="index.html"     class="nav-link">תיק השקעות</a>
+    <a href="buy.html"       class="nav-link">ניתוח קנייה</a>
+    <a href="sell.html"      class="nav-link">המלצות מכירה</a>
+    <a href="watchlist.html" class="nav-link active">מעקב</a>
+    <a href="settings.html"  class="nav-link">הגדרות</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-header">
+    <h1 class="page-title">רשימת מעקב</h1>
+  </div>
+
+  <!-- Add ticker input -->
+  <div class="input-group" style="max-width:400px;margin-bottom:1.5rem">
+    <input class="input" id="watch-input" placeholder="הוסף סמל מניה..." style="text-transform:uppercase;flex:1">
+    <button class="btn btn-primary" id="btn-add-watch">הוסף</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="watch-loading" class="loading-wrap" style="display:none">
+    <div class="spinner"></div><span>טוען רשימת מעקב...</span>
+  </div>
+
+  <!-- Grid -->
+  <div class="watchlist-grid" id="watchlist-grid"></div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="js/watchlist.js"></script>
+</body>
+</html>

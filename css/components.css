@@ -1,0 +1,247 @@
+/* ===== components.css ===== */
+/* Page-specific component styles */
+
+/* ── Dashboard holdings table ───────────────────────────────────────── */
+.signal-cell { white-space: nowrap; }
+.actions-cell { white-space: nowrap; }
+
+/* ── Allocation chart ───────────────────────────────────────────────── */
+.allocation-wrap {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.allocation-chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.allocation-chart-card canvas { max-width: 200px; }
+
+/* ── Pattern card ───────────────────────────────────────────────────── */
+.pattern-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+.pattern-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.pattern-name { font-weight: 700; font-size: 1rem; }
+.pattern-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.confidence-bar-wrap { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); }
+.confidence-bar { width: 80px; height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
+.confidence-fill { height: 100%; border-radius: 999px; }
+.conf-high   { background: var(--green); }
+.conf-mid    { background: var(--yellow); }
+.conf-low    { background: var(--red); }
+
+.pattern-desc { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.35rem; }
+.pattern-targets {
+  display: flex; gap: 1rem; margin-top: 0.6rem; font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+.pt-item { display: flex; flex-direction: column; }
+.pt-label { font-size: 0.75rem; color: var(--text-muted); }
+.pt-value { font-weight: 600; direction: ltr; }
+.pt-target { color: var(--green); }
+.pt-stop   { color: var(--red); }
+
+/* ── Analysis score card ────────────────────────────────────────────── */
+.analysis-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.analysis-ticker { font-size: 1.6rem; font-weight: 800; }
+.analysis-name   { font-size: 0.9rem; color: var(--text-muted); }
+.analysis-price  { font-size: 1.3rem; font-weight: 700; direction: ltr; }
+
+.score-display {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+  flex-wrap: wrap;
+}
+.score-number {
+  font-size: 2.5rem;
+  font-weight: 800;
+  direction: ltr;
+  line-height: 1;
+}
+.score-number.positive { color: var(--green); }
+.score-number.negative { color: var(--red); }
+
+/* ── MA 150w info block ─────────────────────────────────────────────── */
+.ma150w-block {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.ma150w-stat { display: flex; flex-direction: column; }
+.ma150w-label { font-size: 0.75rem; color: var(--text-muted); }
+.ma150w-value { font-size: 1rem; font-weight: 600; direction: ltr; }
+.ma150w-above { color: var(--green); }
+.ma150w-below { color: var(--red); }
+
+/* ── Watchlist grid ─────────────────────────────────────────────────── */
+.watchlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.watch-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.watch-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.watch-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  direction: ltr;
+}
+.price-big { font-size: 1.2rem; }
+.watch-signal { min-height: 26px; }
+.watch-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
+/* ── Settings page ──────────────────────────────────────────────────── */
+.settings-section {
+  max-width: 540px;
+  margin-bottom: 2rem;
+}
+.settings-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.status-dot.ok      { background: var(--green); }
+.status-dot.error   { background: var(--red); }
+.status-dot.testing { background: var(--yellow); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+/* ── BUY analysis page ──────────────────────────────────────────────── */
+.buy-search {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  max-width: 480px;
+}
+.buy-search .input {
+  flex: 1;
+  font-size: 1.1rem;
+  padding: 0.65rem 1rem;
+}
+.recent-tickers {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.ticker-chip {
+  padding: 0.3rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  color: var(--text);
+}
+.ticker-chip:hover { background: var(--bg-hover); border-color: var(--blue); color: var(--blue); }
+
+/* ── Sell page ──────────────────────────────────────────────────────── */
+.sell-table-wrap th:last-child,
+.sell-table-wrap td:last-child { text-align: center; }
+
+/* ── Chart overlay controls ─────────────────────────────────────────── */
+.chart-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.overlay-toggles {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.toggle-btn.on  { background: var(--bg-hover); color: var(--text); border-color: var(--blue); }
+.toggle-btn:hover { border-color: var(--border-light); }
+
+/* ── Responsive tweaks ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .watchlist-grid { grid-template-columns: 1fr 1fr; }
+  .ma150w-block { flex-direction: column; gap: 0.5rem; }
+  .score-display { gap: 0.5rem; }
+  .score-number { font-size: 2rem; }
+}

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ניתוח קנייה | SharePortfolio</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/chart.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">📈 SharePortfolio</span>
+  <div class="nav-links">
+    <a href="index.html"     class="nav-link">תיק השקעות</a>
+    <a href="buy.html"       class="nav-link active">ניתוח קנייה</a>
+    <a href="sell.html"      class="nav-link">המלצות מכירה</a>
+    <a href="watchlist.html" class="nav-link">מעקב</a>
+    <a href="settings.html"  class="nav-link">הגדרות</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-header">
+    <h1 class="page-title">ניתוח קנייה</h1>
+  </div>
+
+  <!-- Search -->
+  <div class="buy-search">
+    <input class="input" id="ticker-input" placeholder="הכנס סמל מניה (לדוגמה: AAPL)" style="text-transform:uppercase;font-size:1.1rem">
+    <button class="btn btn-primary" id="btn-analyze">נתח</button>
+  </div>
+
+  <!-- Recent tickers -->
+  <div id="recent-tickers" class="recent-tickers" style="display:none">
+    <span style="font-size:.85rem;color:var(--text-muted);align-self:center">אחרונים:</span>
+  </div>
+
+  <!-- Loading -->
+  <div id="buy-loading" class="loading-wrap" style="display:none">
+    <div class="spinner"></div><span id="buy-loading-text">מנתח מניה...</span>
+  </div>
+
+  <!-- Results -->
+  <div id="buy-results" style="display:none">
+    <!-- Analysis card -->
+    <div class="analysis-card">
+      <div class="analysis-header">
+        <div>
+          <div class="analysis-ticker" id="res-ticker"></div>
+          <div class="analysis-name"   id="res-name"></div>
+        </div>
+        <div style="text-align:left">
+          <div class="analysis-price ltr" id="res-price"></div>
+        </div>
+      </div>
+
+      <div class="score-display">
+        <div class="score-number ltr" id="res-score"></div>
+        <div id="res-signal"></div>
+      </div>
+
+      <!-- MA 150W -->
+      <div class="ma150w-block" id="res-ma150w"></div>
+
+      <!-- Signal factors -->
+      <ul class="signal-factors" id="res-factors"></ul>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
+        <a id="res-chart-link" href="#" class="btn btn-outline">גרף מלא</a>
+        <button class="btn btn-primary" id="res-add-watch">+ הוסף למעקב</button>
+        <button class="btn btn-success" id="res-add-holding">+ הוסף לתיק</button>
+      </div>
+    </div>
+
+    <!-- Patterns -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="card-title" style="margin-bottom:.75rem">תבניות שזוהו</div>
+      <div id="res-patterns"></div>
+    </div>
+
+    <!-- Mini chart -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:.75rem">גרף (שנה אחרונה)</div>
+      <div id="buy-chart" style="height:300px"></div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="buy-error" style="display:none" class="card" style="border-color:var(--red)">
+    <p style="color:var(--red)" id="buy-error-msg"></p>
+  </div>
+</main>
+
+<!-- Add to portfolio modal (reuse from index) -->
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">הוסף לתיק</span>
+      <button class="btn-icon" onclick="document.getElementById('modal-overlay').classList.remove('open')">✕</button>
+    </div>
+    <form id="holding-form" novalidate>
+      <div class="form-row">
+        <label class="form-label">סמל</label>
+        <input class="input input-rtl" id="field-ticker" readonly style="background:var(--bg-hover)">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="field-shares">כמות מניות</label>
+        <input class="input" id="field-shares" type="number" step="0.000001" min="0.000001" placeholder="10" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="field-cost">עלות ממוצעת לשנייה (USD)</label>
+        <input class="input" id="field-cost" type="number" step="0.01" min="0.01" required id="field-cost">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('modal-overlay').classList.remove('open')">ביטול</button>
+        <button type="submit" class="btn btn-primary">הוסף</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { requireConfig }   from './js/config.js';
+import { analyzeStock }    from './js/recommendations.js';
+import { fetchOHLCV, fetchCurrentPrice } from './js/proxy.js';
+import { renderChart }     from './js/chart-init.js';
+import { addToWatchlist }  from './js/db.js';
+import { upsertHolding }   from './js/db.js';
+import { formatUSD, formatPct, signalBadge, dirBadge, PATTERN_LABELS, showToast, ltr, pnlClass } from './js/utils.js';
+
+if (!requireConfig()) throw new Error('redirect');
+
+const RECENT_KEY = 'recent_tickers';
+
+function getRecent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } }
+function addRecent(t) {
+  const r = [t, ...getRecent().filter(x => x !== t)].slice(0, 10);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(r));
+  renderRecent();
+}
+function renderRecent() {
+  const r = getRecent();
+  const el = document.getElementById('recent-tickers');
+  if (!r.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const chips = r.map(t => `<button class="ticker-chip" data-ticker="${t}">${t}</button>`).join('');
+  el.innerHTML = `<span style="font-size:.85rem;color:var(--text-muted);align-self:center">אחרונים:</span>${chips}`;
+  el.addEventListener('click', e => {
+    if (e.target.dataset.ticker) runAnalysis(e.target.dataset.ticker);
+  });
+}
+renderRecent();
+
+// Pre-fill from URL param
+const params = new URLSearchParams(location.search);
+const urlTicker = params.get('ticker');
+if (urlTicker) {
+  document.getElementById('ticker-input').value = urlTicker;
+  runAnalysis(urlTicker);
+}
+
+document.getElementById('btn-analyze').addEventListener('click', () => {
+  const t = document.getElementById('ticker-input').value.trim().toUpperCase();
+  if (t) runAnalysis(t);
+});
+document.getElementById('ticker-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-analyze').click();
+});
+document.getElementById('ticker-input').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase();
+});
+
+async function runAnalysis(ticker) {
+  ticker = ticker.toUpperCase();
+  document.getElementById('buy-results').style.display = 'none';
+  document.getElementById('buy-error').style.display   = 'none';
+  document.getElementById('buy-loading').style.display = 'flex';
+  document.getElementById('buy-loading-text').textContent = `מנתח את ${ticker}...`;
+
+  try {
+    const [result, quote] = await Promise.all([
+      analyzeStock(ticker),
+      fetchCurrentPrice(ticker),
+    ]);
+    addRecent(ticker);
+    renderResults(result, quote);
+  } catch (err) {
+    document.getElementById('buy-error').style.display    = 'block';
+    document.getElementById('buy-error-msg').textContent  = `שגיאה: ${err.message}`;
+  } finally {
+    document.getElementById('buy-loading').style.display = 'none';
+  }
+}
+
+function renderResults(result, quote) {
+  document.getElementById('buy-results').style.display = 'block';
+
+  document.getElementById('res-ticker').textContent = result.ticker;
+  document.getElementById('res-name').textContent   = quote.name || '';
+  document.getElementById('res-price').textContent  = quote.price ? formatUSD(quote.price) : '—';
+  document.getElementById('res-chart-link').href    = `chart.html?ticker=${result.ticker}`;
+
+  const score = result.score;
+  const scoreEl = document.getElementById('res-score');
+  scoreEl.textContent = (score > 0 ? '+' : '') + score;
+  scoreEl.className = 'score-number ltr ' + (score > 0 ? 'positive' : score < 0 ? 'negative' : '');
+
+  document.getElementById('res-signal').innerHTML = signalBadge(result.signal);
+
+  // MA 150W
+  const { last } = result.indicators;
+  if (last.ma150w) {
+    const dev = ((last.close - last.ma150w) / last.ma150w) * 100;
+    document.getElementById('res-ma150w').innerHTML = `
+      <div class="ma150w-stat"><span class="ma150w-label">MA 150W</span><span class="ma150w-value ltr">${formatUSD(last.ma150w)}</span></div>
+      <div class="ma150w-stat"><span class="ma150w-label">סטייה</span><span class="ma150w-value ${dev>=0?'ma150w-above':'ma150w-below'} ltr">${dev>=0?'+':''}${dev.toFixed(1)}%</span></div>
+      <div class="ma150w-stat"><span class="ma150w-label">מיקום</span><span class="${dev>=0?'ma150w-above':'ma150w-below'}">${dev>=0?'מעל ✓':'מתחת ✗'}</span></div>
+    `;
+  }
+
+  // Factors
+  document.getElementById('res-factors').innerHTML = result.signals.map(s => `
+    <li class="signal-factor">
+      <span class="factor-score ${s.score>0?'pos':'neg'} ltr">${s.score>0?'+':''}${s.score}</span>
+      <span>${s.desc}</span>
+    </li>
+  `).join('');
+
+  // Patterns
+  const patsEl = document.getElementById('res-patterns');
+  if (result.patterns.length) {
+    patsEl.innerHTML = result.patterns.map(p => {
+      const lbl = PATTERN_LABELS[p.type] || { text: p.type };
+      const conf = Math.round(p.confidence * 100);
+      return `
+        <div class="pattern-card">
+          <div class="pattern-card-header">
+            <span class="pattern-name">${lbl.text}</span>
+            <div class="pattern-meta">
+              ${dirBadge(p.direction)}
+              <div class="confidence-bar-wrap">
+                <div class="confidence-bar"><div class="confidence-fill ${conf>=70?'conf-high':conf>=50?'conf-mid':'conf-low'}" style="width:${conf}%"></div></div>
+                <span>${conf}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="pattern-desc">${p.description}</div>
+          ${p.targetPrice ? `<div class="pattern-targets"><div class="pt-item"><span class="pt-label">מחיר יעד</span><span class="pt-value pt-target ltr">${formatUSD(p.targetPrice)}</span></div></div>` : ''}
+        </div>
+      `;
+    }).join('');
+  } else {
+    patsEl.innerHTML = '<p style="color:var(--text-muted)">לא זוהו תבניות מוכרות</p>';
+  }
+
+  // Mini chart (last year)
+  const yearOhlcv = result.dailyOhlcv.slice(-252);
+  if (yearOhlcv.length) {
+    renderChart('buy-chart', yearOhlcv, result.weeklyOhlcv, result.patterns, { showMA: true, showMA150w: true, showRSI: false, showMACD: false, showVolume: false });
+  }
+
+  // Watchlist button
+  document.getElementById('res-add-watch').onclick = async () => {
+    try { await addToWatchlist(result.ticker); showToast(`${result.ticker} נוסף למעקב`, 'success'); }
+    catch (err) { showToast(err.message, 'error'); }
+  };
+
+  // Add to portfolio modal
+  document.getElementById('res-add-holding').onclick = () => {
+    document.getElementById('field-ticker').value = result.ticker;
+    document.getElementById('field-cost').value   = quote.price ? quote.price.toFixed(2) : '';
+    document.getElementById('modal-overlay').classList.add('open');
+  };
+  document.getElementById('holding-form').onsubmit = async e => {
+    e.preventDefault();
+    const shares   = parseFloat(document.getElementById('field-shares').value);
+    const avg_cost = parseFloat(document.getElementById('field-cost').value);
+    if (isNaN(shares) || isNaN(avg_cost)) return;
+    await upsertHolding({ ticker: result.ticker, shares, avg_cost });
+    document.getElementById('modal-overlay').classList.remove('open');
+    showToast(`${result.ticker} נוסף לתיק`, 'success');
+  };
+}
+</script>
+</body>
+</html>

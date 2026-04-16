@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>המלצות מכירה | SharePortfolio</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">📈 SharePortfolio</span>
+  <div class="nav-links">
+    <a href="index.html"     class="nav-link">תיק השקעות</a>
+    <a href="buy.html"       class="nav-link">ניתוח קנייה</a>
+    <a href="sell.html"      class="nav-link active">המלצות מכירה</a>
+    <a href="watchlist.html" class="nav-link">מעקב</a>
+    <a href="settings.html"  class="nav-link">הגדרות</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-header">
+    <h1 class="page-title">המלצות מכירה</h1>
+    <button class="btn btn-primary" id="btn-refresh">↻ רענן ניתוח</button>
+  </div>
+
+  <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.5rem">
+    ניתוח טכני אוטומטי לכל האחזקות בתיק. ממוין מה-"מכירה חזקה" לטובה ביותר.
+  </p>
+
+  <!-- Loading -->
+  <div id="sell-loading" class="loading-wrap" style="display:none">
+    <div class="spinner"></div><span id="sell-loading-text">מנתח אחזקות...</span>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="sell-progress" style="display:none;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted);margin-bottom:.25rem">
+      <span id="progress-label">מנתח...</span>
+      <span id="progress-count"></span>
+    </div>
+    <div style="background:var(--border);border-radius:999px;height:6px">
+      <div id="progress-fill" style="background:var(--blue);height:100%;border-radius:999px;width:0%;transition:width .3s"></div>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div class="table-wrap sell-table-wrap" id="sell-results" style="display:none">
+    <table>
+      <thead>
+        <tr>
+          <th>סמל</th>
+          <th>שם</th>
+          <th>מחיר נוכחי</th>
+          <th>ר"ה %</th>
+          <th>ציון</th>
+          <th>אות</th>
+          <th>תבנית עיקרית</th>
+          <th>MA 150W</th>
+          <th>פעולה</th>
+        </tr>
+      </thead>
+      <tbody id="sell-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Empty -->
+  <div id="sell-empty" style="display:none" class="card">
+    <p class="empty-state">אין אחזקות בתיק. <a href="index.html">הוסף אחזקות</a> כדי לקבל המלצות מכירה.</p>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { requireConfig }  from './js/config.js';
+import { getHoldings }    from './js/db.js';
+import { analyzeStock }   from './js/recommendations.js';
+import { fetchCurrentPrice } from './js/proxy.js';
+import { formatUSD, formatPct, signalBadge, PATTERN_LABELS, showToast, ltr, pnlClass } from './js/utils.js';
+
+if (!requireConfig()) throw new Error('redirect');
+
+document.getElementById('btn-refresh').addEventListener('click', loadSellAnalysis);
+loadSellAnalysis();
+
+async function loadSellAnalysis() {
+  document.getElementById('sell-results').style.display = 'none';
+  document.getElementById('sell-empty').style.display   = 'none';
+  document.getElementById('sell-loading').style.display = 'flex';
+  document.getElementById('sell-progress').style.display = 'block';
+  document.getElementById('progress-fill').style.width  = '0%';
+
+  let holdings;
+  try {
+    holdings = await getHoldings();
+  } catch (err) {
+    showToast('שגיאה בטעינת אחזקות: ' + err.message, 'error');
+    document.getElementById('sell-loading').style.display = 'none';
+    return;
+  }
+
+  if (!holdings.length) {
+    document.getElementById('sell-loading').style.display  = 'none';
+    document.getElementById('sell-progress').style.display = 'none';
+    document.getElementById('sell-empty').style.display    = 'block';
+    return;
+  }
+
+  // Analyze one-by-one with progress
+  const results = [];
+  for (let i = 0; i < holdings.length; i++) {
+    const h = holdings[i];
+    document.getElementById('progress-label').textContent = `מנתח ${h.ticker}...`;
+    document.getElementById('progress-count').textContent = `${i+1} / ${holdings.length}`;
+    document.getElementById('progress-fill').style.width  = `${((i+1)/holdings.length)*100}%`;
+
+    try {
+      const [analysis, quote] = await Promise.all([
+        analyzeStock(h.ticker),
+        fetchCurrentPrice(h.ticker),
+      ]);
+      results.push({ holding: h, analysis, quote });
+    } catch (err) {
+      results.push({ holding: h, error: err.message });
+    }
+  }
+
+  document.getElementById('sell-loading').style.display  = 'none';
+  document.getElementById('sell-progress').style.display = 'none';
+
+  // Sort by score ascending (most bearish first)
+  results.sort((a, b) => {
+    const sa = a.analysis?.score ?? 0;
+    const sb = b.analysis?.score ?? 0;
+    return sa - sb;
+  });
+
+  renderTable(results, holdings);
+}
+
+function renderTable(results, holdings) {
+  document.getElementById('sell-results').style.display = 'block';
+  const tbody = document.getElementById('sell-tbody');
+
+  tbody.innerHTML = results.map(({ holding, analysis, quote, error }) => {
+    if (error) {
+      return `<tr><td>${holding.ticker}</td><td colspan="8" style="color:var(--text-muted);font-size:.85rem">שגיאה: ${error}</td></tr>`;
+    }
+
+    const price  = quote?.price;
+    const cost   = holding.avg_cost;
+    const pnlPct = price != null ? ((price - cost) / cost) * 100 : null;
+    const { last } = analysis.indicators;
+
+    // Best bearish pattern
+    const bearish = analysis.patterns.filter(p => p.direction === 'bearish');
+    const topPat  = bearish[0];
+    const patLabel = topPat ? (PATTERN_LABELS[topPat.type]?.text || topPat.type) : '—';
+
+    // MA 150W status
+    let ma150wStatus = '—', ma150wCls = '';
+    if (last.ma150w != null) {
+      const dev = ((last.close - last.ma150w) / last.ma150w) * 100;
+      ma150wStatus = `${dev >= 0 ? '+' : ''}${dev.toFixed(1)}%`;
+      ma150wCls = dev >= 0 ? 'positive' : 'negative';
+    }
+
+    // Score bar color
+    const score  = analysis.score;
+    const barColor = score <= -30 ? 'var(--red)' : score <= 0 ? 'var(--orange)' : 'var(--green)';
+    const barW     = Math.abs(score); // 0-100
+
+    return `
+      <tr>
+        <td><a href="chart.html?ticker=${holding.ticker}" class="ticker-link">${holding.ticker}</a></td>
+        <td style="color:var(--text-muted);font-size:.85rem">${holding.name || ''}</td>
+        <td class="ltr">${price != null ? ltr(formatUSD(price)) : '—'}</td>
+        <td class="ltr ${pnlClass(pnlPct)}">${pnlPct != null ? ltr(formatPct(pnlPct)) : '—'}</td>
+        <td>
+          <div class="score-bar-wrap">
+            <div class="score-bar"><div class="score-fill" style="width:${barW}%;background:${barColor}"></div></div>
+            <span class="score-text ltr">${score > 0 ? '+' : ''}${score}</span>
+          </div>
+        </td>
+        <td>${signalBadge(analysis.signal)}</td>
+        <td style="font-size:.82rem">${patLabel}</td>
+        <td class="ltr ${ma150wCls}">${ltr(ma150wStatus)}</td>
+        <td><a href="chart.html?ticker=${holding.ticker}" class="btn btn-outline btn-sm">גרף</a></td>
+      </tr>
+    `;
+  }).join('');
+}
+</script>
+</body>
+</html>
