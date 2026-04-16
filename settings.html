@@ -113,7 +113,7 @@ create table if not exists holdings (
   updated_at timestamptz default now()
 );
 alter table holdings enable row level security;
-create policy if not exists "own rows" on holdings
+create policy "own rows holdings" on holdings
   using (user_id = current_setting('request.headers')::json->>'x-user-id');
 
 -- רשימת מעקב
@@ -125,7 +125,7 @@ create table if not exists watchlist (
   unique(user_id, ticker)
 );
 alter table watchlist enable row level security;
-create policy if not exists "own rows" on watchlist
+create policy "own rows watchlist" on watchlist
   using (user_id = current_setting('request.headers')::json->>'x-user-id');
 
 -- מטמון ניתוח (ללא RLS — נתוני מניות הם ציבוריים)

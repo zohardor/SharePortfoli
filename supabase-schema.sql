@@ -17,7 +17,7 @@ create table if not exists holdings (
 
 alter table holdings enable row level security;
 
-create policy if not exists "own rows holdings" on holdings
+create policy "own rows holdings" on holdings
   using (user_id = current_setting('request.headers')::json->>'x-user-id');
 
 create index if not exists idx_holdings_user_id on holdings (user_id);
@@ -33,7 +33,7 @@ create table if not exists watchlist (
 
 alter table watchlist enable row level security;
 
-create policy if not exists "own rows watchlist" on watchlist
+create policy "own rows watchlist" on watchlist
   using (user_id = current_setting('request.headers')::json->>'x-user-id');
 
 create index if not exists idx_watchlist_user_id on watchlist (user_id);
